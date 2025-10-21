@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"dummy-https-proxy-sub/internal/proxy"
-	"dummy-https-proxy-sub/internal/resolver"
 )
 
 func flagParser() (string, error) {
@@ -40,7 +39,7 @@ func main() {
 	if err != nil {
 		errorLogger.Fatal(err)
 	}
-	service := proxy.NewService(http.DefaultClient, resolver.NewNetResolver())
+	service := proxy.NewService(http.DefaultClient)
 	handler := proxy.NewHandler(service, infoLogger, errorLogger)
 	server := &http.Server{Addr: addr, Handler: handler}
 

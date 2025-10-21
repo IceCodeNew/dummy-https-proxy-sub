@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -26,17 +25,6 @@ func (f *fakeHTTPClient) Do(req *http.Request) (*http.Response, error) {
 		return nil, f.err
 	}
 	return f.response, nil
-}
-
-type fakeResolver struct {
-	addrs map[string][]net.IPAddr
-}
-
-func (f *fakeResolver) LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error) {
-	if addrs, ok := f.addrs[host]; ok {
-		return addrs, nil
-	}
-	return nil, errors.New("host not found")
 }
 
 func TestServiceProcessSuccess(t *testing.T) {
@@ -66,22 +54,16 @@ func TestServiceProcessSuccess(t *testing.T) {
 	}
 
 	client := &fakeHTTPClient{response: resp}
-	resolver := &fakeResolver{
-		addrs: map[string][]net.IPAddr{
-			"1.server.xyz": {{IP: net.IPv4(12, 34, 56, 78)}},
-			"2.server.xyz": {{IP: net.IPv4(23, 45, 67, 89)}},
-		},
-	}
 
-	service := NewService(client, resolver)
+	service := NewService(client)
 	encoded, err := service.Process(context.Background(), "https://source.example/config")
 	if err != nil {
 		t.Fatalf("Process returned error: %v", err)
 	}
 
 	expectedLines := []string{
-		"https://admin:%3Credacted%3E@12.34.56.78:4433?sni=pku.speedtest.ooklaserver.wallesspku.space#Server-1",
-		"https://admin:%3Credacted%3E@23.45.67.89:4444?sni=pku.speedtest.ooklaserver.wallesspku.space#Server-2",
+		"https://admin:%3Credacted%3E@1.server.xyz:4433?sni=pku.speedtest.ooklaserver.wallesspku.space#Server-1",
+		"https://admin:%3Credacted%3E@2.server.xyz:4444?sni=pku.speedtest.ooklaserver.wallesspku.space#Server-2",
 	}
 	expected := base64Encode(expectedLines)
 
@@ -96,8 +78,7 @@ func TestServiceProcessSuccess(t *testing.T) {
 
 func TestServiceProcessInvalidScheme(t *testing.T) {
 	client := &fakeHTTPClient{}
-	resolver := &fakeResolver{}
-	service := NewService(client, resolver)
+	service := NewService(client)
 	_, err := service.Process(context.Background(), "ftp://invalid")
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -127,13 +108,8 @@ func TestServiceProcessTooLarge(t *testing.T) {
 	}
 
 	client := &fakeHTTPClient{response: resp}
-	resolver := &fakeResolver{
-		addrs: map[string][]net.IPAddr{
-			"1.server.xyz": {{IP: net.IPv4(1, 2, 3, 4)}},
-		},
-	}
 
-	service := NewService(client, resolver)
+	service := NewService(client)
 	_, err := service.Process(context.Background(), "https://source.example/config")
 	if err == nil {
 		t.Fatalf("expected error for truncated upstream")

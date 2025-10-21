@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"strings"
 
-	"dummy-https-proxy-sub/internal/resolver"
 	"dummy-https-proxy-sub/internal/yaml"
 )
 
@@ -21,13 +20,12 @@ type HTTPClient interface {
 // Service coordinates fetching upstream YAML and converting proxies into
 // https://... lines which are then base64-encoded.
 type Service struct {
-	client   HTTPClient
-	resolver resolver.Resolver
+	client HTTPClient
 }
 
 // NewService constructs a Service.
-func NewService(client HTTPClient, resolver resolver.Resolver) *Service {
-	return &Service{client: client, resolver: resolver}
+func NewService(client HTTPClient) *Service {
+	return &Service{client: client}
 }
 
 // Process fetches the YAML at targetURL and returns a single-line base64
@@ -36,8 +34,8 @@ func (s *Service) Process(ctx context.Context, targetURL string) ([]byte, error)
 	if s == nil {
 		return nil, fmt.Errorf("%w: service not initialized", ErrInvalidInput)
 	}
-	if s.client == nil || s.resolver == nil {
-		return nil, fmt.Errorf("%w: HTTPClient or resolver not initialized", ErrInvalidInput)
+	if s.client == nil {
+		return nil, fmt.Errorf("%w: HTTPClient not initialized", ErrInvalidInput)
 	}
 
 	targetURL = strings.TrimSpace(targetURL)
@@ -65,7 +63,7 @@ func (s *Service) Process(ctx context.Context, targetURL string) ([]byte, error)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%w: upstream returned %d", ErrUpstream, resp.StatusCode)
 	}
-	lines, err := yaml.ParseProxiesFromReader(ctx, resp.Body, s.resolver)
+	lines, err := yaml.ParseProxiesFromReader(ctx, resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
 	}
