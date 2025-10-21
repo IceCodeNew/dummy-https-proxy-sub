@@ -1,0 +1,65 @@
+name: dummy-https-proxy-sub Image CI
+permissions: {}
+
+on:
+  pull_request:
+  push:
+    branches:
+    - 'master'
+
+env:
+  KO_DOCKER_REPO: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/dummy-https-proxy-sub
+
+jobs:
+  ci-test-and-release:
+    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          check-latest: true
+          cache: false
+          go-version-file: 'go.mod'
+
+      - name: pre-start
+        shell: bash
+        run: |
+          curl() { $(type -P curl) -LRq --retry 5 --retry-delay 10 --retry-max-time 60 --fail "$@"; }
+          curl -o '.ko.yaml' -- \
+              https://raw.githubusercontent.com/IceCodeNew/docker-collections/master/default.ko.yaml
+
+      - uses: ko-build/setup-ko@d006021bd0c28d1ce33a07e7943d48b079944c8d # v0.9
+      - run: ko build --local --platform ${{ matrix.platform }} --bare ./cmd/...
+
+      -
+        name: Smoke Test
+        env:
+          _TARGETARCH: ${{ matrix.platform }}
+        run: |
+          docker run --rm "${{ env.KO_DOCKER_REPO }}:latest" --help
+
+          DHPS_BIN=$(
+              sudo find /var/lib/docker/overlay2/ -type f -name dummy-https-proxy-sub -size +2000k -print | head -n 1
+          )
+          sudo install -pvD "${DHPS_BIN}" "/usr/local/bin/dummy-https-proxy-sub-${_TARGETARCH##linux/}"
+      -
+        name: Release
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        if: github.event_name == 'push' && github.event.repository.default_branch == github.ref_name
+        with:
+          fail_on_unmatched_files: true
+          generate_release_notes: false
+          make_latest: true
+          tag_name: latest
+          files: ${{ matrix.platform == 'linux/arm64' && '/usr/local/bin/dummy-https-proxy-sub-arm64' || '/usr/local/bin/dummy-https-proxy-sub-amd64' }}
+    permissions:
+      contents: write
