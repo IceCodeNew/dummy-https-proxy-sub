@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 
 	"dummy-https-proxy-sub/internal/yaml"
@@ -119,5 +120,91 @@ func TestServiceProcessTooLarge(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "read proxies") {
 		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestServiceProcessContextCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	client := &fakeHTTPClient{err: context.Canceled}
+	service := NewService(client)
+
+	if _, err := service.Process(ctx, "https://source.example/config"); err == nil {
+		t.Fatalf("expected cancellation error")
+	}
+}
+
+func TestServiceProcessSingleFlight(t *testing.T) {
+	t.Parallel()
+
+	yamlBody := `proxies:
+- name: "Server-1"
+  password: <redacted>
+  port: 4433
+  server: 1.server.xyz
+  sni: sni.example
+  tls: true
+  type: http
+  username: admin
+`
+
+	client := newBlockingHTTPClient(yamlBody)
+	service := NewService(client)
+
+	expected := base64Encode([]string{
+		"https://admin:%3Credacted%3E@1.server.xyz:4433?sni=sni.example#Server-1",
+	})
+
+	const workers = 4
+	start := make(chan struct{})
+	ready := make(chan struct{}, workers)
+
+	var (
+		wg      sync.WaitGroup
+		results = make([][]byte, workers)
+		errs    = make([]error, workers)
+	)
+
+	for i := range workers {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			// block this goroutine, makes sure that all workers launch their HTTP call together
+			// once the main goroutine closed the start channel.
+			<-start
+
+			// signals current worker is about to call the service.Process function.
+			// when the main goroutine knows all workers are ready, it calls the release function,
+			// letting all workers launch their HTTP call at the same time.
+			ready <- struct{}{}
+			res, err := service.Process(context.Background(), "https://source.example/config")
+			errs[idx], results[idx] = err, res
+		}(i)
+	}
+
+	close(start)
+	for range workers {
+		<-ready
+	}
+	client.waitUntilStarted()
+	client.release()
+	wg.Wait()
+
+	if got := client.callCount(); got != 1 {
+		t.Fatalf("expected exactly one upstream request, got %d", got)
+	}
+
+	for i := range workers {
+		if errs[i] != nil {
+			t.Fatalf("worker %d returned error: %v", i, errs[i])
+		}
+		if !bytes.Equal(results[i], expected) {
+			t.Fatalf("worker %d unexpected result: want %s got %s", i, expected, results[i])
+		}
+	}
+
+	if workers > 1 && &results[0][0] == &results[1][0] {
+		t.Fatalf("results share the same backing array")
 	}
 }

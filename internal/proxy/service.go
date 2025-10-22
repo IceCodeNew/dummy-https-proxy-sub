@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 
+	"golang.org/x/sync/singleflight"
+
 	"dummy-https-proxy-sub/internal/yaml"
 )
 
@@ -21,6 +23,7 @@ type HTTPClient interface {
 // https://... lines which are then base64-encoded.
 type Service struct {
 	client HTTPClient
+	group  singleflight.Group
 }
 
 // NewService constructs a Service.
@@ -50,24 +53,41 @@ func (s *Service) Process(ctx context.Context, targetURL string) ([]byte, error)
 		return nil, fmt.Errorf("%w: unsupported scheme %q", ErrInvalidInput, parsed.Scheme)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("%w: craft request failed: %v", ErrInvalidInput, err)
-	}
+	targetURL = parsed.String()
+	resultCh := s.group.DoChan(targetURL, func() (any, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("%w: craft request failed: %v", ErrInvalidInput, err)
+		}
 
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("%w: fetch upstream failed: %v", ErrUpstream, err)
+		resp, err := s.client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("%w: fetch upstream failed: %v", ErrUpstream, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("%w: upstream returned %d", ErrUpstream, resp.StatusCode)
+		}
+		lines, err := yaml.ParseProxiesFromReader(ctx, resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
+		}
+		return base64Encode(lines), nil
+	})
+
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("context canceled")
+	case res := <-resultCh:
+		if res.Err != nil {
+			return nil, res.Err
+		}
+		encoded, ok := res.Val.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("internal error: unexpected type %T of result", res.Val)
+		}
+		return append(make([]byte, 0, len(encoded)), encoded...), nil
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: upstream returned %d", ErrUpstream, resp.StatusCode)
-	}
-	lines, err := yaml.ParseProxiesFromReader(ctx, resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
-	}
-	return base64Encode(lines), nil
 }
 
 func base64Encode(input []string) []byte {
