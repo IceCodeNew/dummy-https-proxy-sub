@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -13,18 +12,18 @@ import (
 )
 
 type stubProcessor struct {
-	result     []byte
+	result     string
 	err        error
 	lastTarget string
 }
 
-func (s *stubProcessor) Process(ctx context.Context, targetURL string) ([]byte, error) {
+func (s *stubProcessor) Process(ctx context.Context, targetURL string) (string, error) {
 	s.lastTarget = targetURL
 	return s.result, s.err
 }
 
 func TestHandlerSuccess(t *testing.T) {
-	processor := &stubProcessor{result: []byte("encoded-result")}
+	processor := &stubProcessor{result: "encoded-result"}
 	infoLogger := log.New(io.Discard, "", 0)
 	errorLogger := log.New(io.Discard, "", 0)
 	handler := NewHandler(processor, infoLogger, errorLogger)
@@ -46,7 +45,7 @@ func TestHandlerSuccess(t *testing.T) {
 		t.Fatalf("unexpected content type: %s", got)
 	}
 
-	if body, _ := rec.Body.ReadBytes('\n'); !bytes.Equal(body, processor.result) {
+	if body, _ := rec.Body.ReadString('\n'); body != processor.result {
 		t.Fatalf("unexpected body: %s", body)
 	}
 }

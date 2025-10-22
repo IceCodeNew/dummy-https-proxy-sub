@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -68,7 +67,7 @@ func TestServiceProcessSuccess(t *testing.T) {
 	}
 	expected := base64Encode(expectedLines)
 
-	if !bytes.Equal(encoded, expected) {
+	if encoded != expected {
 		t.Fatalf("unexpected encoded output. want %s got %s", expected, encoded)
 	}
 
@@ -162,7 +161,7 @@ func TestServiceProcessSingleFlight(t *testing.T) {
 
 	var (
 		wg      sync.WaitGroup
-		results = make([][]byte, workers)
+		results = make([]string, workers)
 		errs    = make([]error, workers)
 	)
 
@@ -199,12 +198,8 @@ func TestServiceProcessSingleFlight(t *testing.T) {
 		if errs[i] != nil {
 			t.Fatalf("worker %d returned error: %v", i, errs[i])
 		}
-		if !bytes.Equal(results[i], expected) {
+		if results[i] != expected {
 			t.Fatalf("worker %d unexpected result: want %s got %s", i, expected, results[i])
 		}
-	}
-
-	if workers > 1 && &results[0][0] == &results[1][0] {
-		t.Fatalf("results share the same backing array")
 	}
 }

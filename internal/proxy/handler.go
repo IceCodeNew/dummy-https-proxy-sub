@@ -10,7 +10,7 @@ import (
 
 // Processor captures the behaviour required by the HTTP handler.
 type Processor interface {
-	Process(ctx context.Context, targetURL string) ([]byte, error)
+	Process(ctx context.Context, targetURL string) (string, error)
 }
 
 // Handler routes incoming HTTP requests through the provided Processor.
@@ -58,7 +58,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(encoded); err != nil && h.errorLogger != nil {
+	if _, err := w.Write([]byte(encoded)); err != nil && h.errorLogger != nil {
 		h.errorLogger.Printf("failed to write response: %v", err)
 	}
 }
