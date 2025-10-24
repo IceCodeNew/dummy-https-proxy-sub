@@ -8,14 +8,16 @@ This file documents contributor expectations and quick reference commands for th
 - Tests: Go unit tests use `_test.go` files next to corresponding packages.
 
 ## Build, Test, and Development Commands
+- `GOFUMPT_SPLIT_LONG_LINES=on find . -type f -name '*.go' -print0 | xargs -0 -r -t -- go run mvdan.cc/gofumpt@latest -l -w` — format Go code.
 - `go build ./...` — compile all packages.
 - `go test ./...` — run unit tests.
 - `go run honnef.co/go/tools/cmd/staticcheck@latest ./...` — static checks.
-- `GOFUMPT_SPLIT_LONG_LINES=on find . -type f -name '*.go' -print0 | xargs -0 -r -t -- go run mvdan.cc/gofumpt@latest -l -w` — format Go code.
 - `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` - vulnerabilities checks.
+- `go run go.uber.org/nilaway/cmd/nilaway@latest ./...` - detect potential nil panics.
+- `go run github.com/alexkohler/prealloc@latest ./...` - find slice declarations that could potentially be preallocated.
 
 ## Coding Style & Naming Conventions
-- Use `GOFUMPT_SPLIT_LONG_LINES=on find . -type f -name '*.go' -print0 | xargs -0 -r -t -- go run mvdan.cc/gofumpt@latest -l -w` for formatting (tabs, 8-space width default for Go).
+- Use `GOFUMPT_SPLIT_LONG_LINES=on find . -type f -name '*.go' -print0 | xargs -0 -r -t -- go run mvdan.cc/gofumpt@latest -l -w` for formatting.
 - Exported identifiers use `CamelCase`; unexported use `camelCase` or short names in small scopes.
 - File names: lowercase with underscores only if helpful, e.g. `server.go`, `match_utils.go`.
 - Comments and code must be in English.
