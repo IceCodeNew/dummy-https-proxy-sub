@@ -3,9 +3,10 @@ package proxy
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"strings"
+
+	lg "dummy-https-proxy-sub/internal/logger"
 )
 
 // Processor captures the behaviour required by the HTTP handler.
@@ -15,17 +16,15 @@ type Processor interface {
 
 // Handler routes incoming HTTP requests through the provided Processor.
 type Handler struct {
-	processor   Processor
-	infoLogger  *log.Logger
-	errorLogger *log.Logger
+	processor Processor
 }
 
 // NewHandler builds a Handler that delegates to the provided Processor and logger.
-func NewHandler(processor Processor, infoLogger, errorLogger *log.Logger) *Handler {
-	if processor == nil || infoLogger == nil || errorLogger == nil {
+func NewHandler(processor Processor) *Handler {
+	if processor == nil {
 		return nil
 	}
-	return &Handler{processor: processor, infoLogger: infoLogger, errorLogger: errorLogger}
+	return &Handler{processor: processor}
 }
 
 // ServeHTTP extracts the target URL from the request path, processes it, and delivers the base64 payload.
@@ -50,16 +49,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Error(w, message, status)
 
-		if h.errorLogger != nil {
-			h.errorLogger.Printf("request failed: target=%q status=%d error=%v", target, status, err)
-		}
+		lg.ErrorLogger.Printf("request failed: target=%q status=%d error=%v", target, status, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte(encoded)); err != nil && h.errorLogger != nil {
-		h.errorLogger.Printf("failed to write response: %v", err)
+	if _, err := w.Write([]byte(encoded)); err != nil {
+		lg.ErrorLogger.Printf("failed to write response: %v", err)
 	}
 }
 
@@ -71,6 +68,8 @@ func statusFromError(err error) int {
 		return http.StatusBadRequest
 	case errors.Is(err, ErrUpstream):
 		return http.StatusBadGateway
+	case errors.Is(err, ErrNoValidProxies):
+		return http.StatusNoContent
 	default:
 		return http.StatusInternalServerError
 	}

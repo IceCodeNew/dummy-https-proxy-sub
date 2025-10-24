@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -9,8 +10,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"dummy-https-proxy-sub/internal/yaml"
 )
 
 type fakeHTTPClient struct {
@@ -61,14 +60,12 @@ func TestServiceProcessSuccess(t *testing.T) {
 		t.Fatalf("Process returned error: %v", err)
 	}
 
-	expectedLines := []string{
-		"https://admin:%3Credacted%3E@1.server.xyz:4433?sni=pku.speedtest.ooklaserver.wallesspku.space#Server-1",
-		"https://admin:%3Credacted%3E@2.server.xyz:4444?sni=pku.speedtest.ooklaserver.wallesspku.space#Server-2",
-	}
-	expected := base64Encode(expectedLines)
+	proxy1, proxy2 := "https://admin:%3Credacted%3E@1.server.xyz:4433?sni=pku.speedtest.ooklaserver.wallesspku.space#Server-1\n",
+		"https://admin:%3Credacted%3E@2.server.xyz:4444?sni=pku.speedtest.ooklaserver.wallesspku.space#Server-2\n"
+	expected := base64.StdEncoding.EncodeToString([]byte(proxy1 + proxy2))
 
 	if encoded != expected {
-		t.Fatalf("unexpected encoded output. want %s got %s", expected, encoded)
+		t.Fatalf("unexpected encoded output: %s", encoded)
 	}
 
 	if client.lastURL != "https://source.example/config" {
@@ -90,9 +87,9 @@ func TestServiceProcessInvalidScheme(t *testing.T) {
 
 func TestServiceProcessTooLarge(t *testing.T) {
 	// temporarily shrink the limit so the test runs quickly
-	old := yaml.MaxYAMLBytes
-	yaml.MaxYAMLBytes = 1
-	defer func() { yaml.MaxYAMLBytes = old }()
+	oldMaxYAMLBytes := maxYAMLBytes
+	maxYAMLBytes = 1
+	defer func() { maxYAMLBytes = oldMaxYAMLBytes }()
 
 	// build a body larger than the temporary limit
 	var sb strings.Builder
@@ -153,7 +150,7 @@ func TestServiceProcessSingleFlight(t *testing.T) {
 
 	expected := base64Encode([]string{
 		"https://admin:%3Credacted%3E@1.server.xyz:4433?sni=sni.example#Server-1",
-	})
+	}, 72)
 
 	const workers = 4
 	start := make(chan struct{})

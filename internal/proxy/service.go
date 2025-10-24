@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -10,8 +9,6 @@ import (
 	"strings"
 
 	"golang.org/x/sync/singleflight"
-
-	"dummy-https-proxy-sub/internal/yaml"
 )
 
 // HTTPClient is the minimal subset of an http client we require.
@@ -68,11 +65,14 @@ func (s *Service) Process(ctx context.Context, targetURL string) (string, error)
 		if resp.StatusCode != http.StatusOK {
 			return "", fmt.Errorf("%w: upstream returned %d", ErrUpstream, resp.StatusCode)
 		}
-		lines, err := yaml.ParseProxiesFromReader(ctx, resp.Body)
+		proxies, bufSize, err := ParseProxiesFromReader(resp.Body)
 		if err != nil {
 			return "", fmt.Errorf("%w: %v", ErrUpstream, err)
 		}
-		return base64Encode(lines), nil
+		if len(proxies) == 0 {
+			return "", fmt.Errorf("%w: no valid proxies found", ErrNoValidProxies)
+		}
+		return base64Encode(proxies, bufSize), nil
 	})
 
 	select {
@@ -90,11 +90,11 @@ func (s *Service) Process(ctx context.Context, targetURL string) (string, error)
 	}
 }
 
-func base64Encode(input []string) string {
-	var buf bytes.Buffer
-	for _, line := range input {
-		buf.WriteString(line)
-		buf.WriteByte('\n')
+func base64Encode(proxies []string, bufSize int) string {
+	buf := make([]byte, 0, bufSize)
+	for _, proxy := range proxies {
+		buf = append(buf, proxy...)
+		buf = append(buf, '\n')
 	}
-	return base64.StdEncoding.EncodeToString(buf.Bytes())
+	return base64.StdEncoding.EncodeToString(buf)
 }

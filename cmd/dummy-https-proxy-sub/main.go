@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	lg "dummy-https-proxy-sub/internal/logger"
 	"dummy-https-proxy-sub/internal/proxy"
 )
 
@@ -31,16 +31,11 @@ func flagParser() (string, error) {
 }
 
 func main() {
-	// Use standard library loggers; info -> stdout, errors -> stderr.
-	infoLogger := log.New(os.Stdout, "INFO: ", log.LstdFlags)
-	errorLogger := log.New(os.Stderr, "ERROR: ", log.LstdFlags)
-
 	addr, err := flagParser()
 	if err != nil {
-		errorLogger.Fatal(err)
+		lg.ErrorLogger.Fatal(err)
 	}
-	service := proxy.NewService(http.DefaultClient)
-	handler := proxy.NewHandler(service, infoLogger, errorLogger)
+	handler := proxy.NewHandler(proxy.NewService(http.DefaultClient))
 	server := &http.Server{Addr: addr, Handler: handler}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -51,12 +46,12 @@ func main() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			errorLogger.Fatalf("server shutdown error: %v", err)
+			lg.ErrorLogger.Fatalf("server shutdown error: %v", err)
 		}
 	}()
 
-	infoLogger.Printf("listening on %s", addr)
+	lg.InfoLogger.Printf("listening on %s", addr)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		errorLogger.Fatalf("server failed: %v", err)
+		lg.ErrorLogger.Fatalf("server failed: %v", err)
 	}
 }

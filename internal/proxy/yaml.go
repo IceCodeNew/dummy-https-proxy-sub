@@ -1,4 +1,4 @@
-package yaml
+package proxy
 
 import (
 	"fmt"
@@ -8,9 +8,9 @@ import (
 	"github.com/goccy/go-yaml/ast"
 )
 
-// MaxYAMLBytes is the maximum number of bytes we will read from the
+// maxYAMLBytes is the maximum number of bytes we will read from the
 // upstream YAML document. Tests may adjust this value.
-var MaxYAMLBytes int64 = 1 << 20 // 1 MiB
+var maxYAMLBytes int64 = 1 << 20 // 1 MiB
 
 // nodeToString tries to extract a stable string representation from the
 // AST node. For scalar nodes it prefers the typed value when present and
@@ -30,6 +30,8 @@ func nodeToString(n ast.Node) (string, error) {
 			default:
 				_str = fmt.Sprintf("%v", vv)
 			}
+		} else {
+			_str = s.String()
 		}
 	}
 	return strings.TrimSpace(_str), nil

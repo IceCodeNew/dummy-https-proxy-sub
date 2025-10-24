@@ -1,7 +1,6 @@
-package yaml
+package proxy
 
 import (
-	"context"
 	"io"
 	"strings"
 	"testing"
@@ -19,25 +18,27 @@ func TestParseProxiesFromReader_Success(t *testing.T) {
   username: admin
 `
 
-	lines, err := ParseProxiesFromReader(context.Background(), io.NopCloser(strings.NewReader(body)))
+	proxies, _, err := ParseProxiesFromReader(io.NopCloser(strings.NewReader(body)))
 	if err != nil {
 		t.Fatalf("ParseProxiesFromReader returned error: %v", err)
 	}
-	if len(lines) != 1 {
-		t.Fatalf("want 1 transformed proxy, got %d", len(lines))
+	if len(proxies) != 1 {
+		t.Fatalf("want 1 transformed proxy, got %d", len(proxies))
 	}
-	if !strings.Contains(lines[0], "a.example:4433") {
-		t.Fatalf("expected host %s not found in %s:", "a.example:4433", lines[0])
+
+	expectedProxyHost := "a.example:4433"
+	if !strings.Contains(proxies[0], expectedProxyHost) {
+		t.Fatalf("expected proxy host %s not found, got %s", expectedProxyHost, proxies[0])
 	}
 }
 
 func TestParseProxiesFromReader_TooLarge(t *testing.T) {
-	old := MaxYAMLBytes
-	MaxYAMLBytes = 1
-	defer func() { MaxYAMLBytes = old }()
+	old := maxYAMLBytes
+	maxYAMLBytes = 1
+	defer func() { maxYAMLBytes = old }()
 
 	body := "proxies:\n- name: \"S\"\n  password: x\n"
-	if _, err := ParseProxiesFromReader(context.Background(), strings.NewReader(body)); err == nil {
+	if _, _, err := ParseProxiesFromReader(strings.NewReader(body)); err == nil {
 		t.Fatalf("expected error for severely truncated upstream, got nil")
 	}
 }

@@ -7,4 +7,6 @@ var (
 	ErrInvalidInput = errors.New("invalid input")
 	// ErrUpstream indicates a failure while interacting with external systems.
 	ErrUpstream = errors.New("upstream failure")
+	// ErrNoValidProxies indicates no valid proxies were found.
+	ErrNoValidProxies = errors.New("no valid proxies found")
 )

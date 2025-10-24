@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -24,9 +22,7 @@ func (s *stubProcessor) Process(ctx context.Context, targetURL string) (string, 
 
 func TestHandlerSuccess(t *testing.T) {
 	processor := &stubProcessor{result: "encoded-result"}
-	infoLogger := log.New(io.Discard, "", 0)
-	errorLogger := log.New(io.Discard, "", 0)
-	handler := NewHandler(processor, infoLogger, errorLogger)
+	handler := NewHandler(processor)
 
 	req := httptest.NewRequest(http.MethodGet, "http://localhost:8000/https://example.com/path?group=gfw", nil)
 	rec := httptest.NewRecorder()
@@ -64,9 +60,7 @@ func TestHandlerErrorMapping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			processor := &stubProcessor{err: tt.err}
-			infoLogger := log.New(io.Discard, "", 0)
-			errorLogger := log.New(io.Discard, "", 0)
-			handler := NewHandler(processor, infoLogger, errorLogger)
+			handler := NewHandler(processor)
 
 			req := httptest.NewRequest(http.MethodGet, "http://localhost:8000/https://example.com", nil)
 			rec := httptest.NewRecorder()
@@ -82,7 +76,7 @@ func TestHandlerErrorMapping(t *testing.T) {
 }
 
 func TestHandlerUnavailable(t *testing.T) {
-	handler := NewHandler(nil, log.New(io.Discard, "", 0), log.New(io.Discard, "", 0))
+	handler := NewHandler(nil)
 	req := httptest.NewRequest(http.MethodGet, "http://localhost:8000/https://example.com", nil)
 	rec := httptest.NewRecorder()
 
@@ -95,9 +89,7 @@ func TestHandlerUnavailable(t *testing.T) {
 
 func TestHandlerPreservesEscapedPath(t *testing.T) {
 	processor := &stubProcessor{}
-	infoLogger := log.New(io.Discard, "", 0)
-	errorLogger := log.New(io.Discard, "", 0)
-	handler := NewHandler(processor, infoLogger, errorLogger)
+	handler := NewHandler(processor)
 
 	// Path includes percent-encoding which must be preserved when reconstructing the target URL.
 	req := httptest.NewRequest(http.MethodGet, "http://localhost:8000/https://example.com/a%20b?x=1", nil)
