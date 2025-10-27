@@ -10,4 +10,8 @@
     "security:openssf-scorecard",
     "group:allNonMajor",
   ],
+  "postUpdateOptions": [
+    "gomodMassage",
+    // "gomodUpdateImportPaths",  // implicate "gomodTidy"
+  ],
 }
