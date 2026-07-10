@@ -24,7 +24,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           check-latest: true
           cache: false
@@ -37,7 +37,7 @@ jobs:
           curl -o '.ko.yaml' -- \
               https://raw.githubusercontent.com/IceCodeNew/docker-collections/master/default.ko.yaml
 
-      - uses: ko-build/setup-ko@d006021bd0c28d1ce33a07e7943d48b079944c8d # v0.9
+      - uses: ko-build/setup-ko@61b4d1d396f5b2e7d6bb6fefdce3dc38d1a13445 # v0.10
       - run: ko build --local --platform ${{ matrix.platform }} --bare ./cmd/...
 
       -
